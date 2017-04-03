@@ -85,7 +85,9 @@ public class TestRDSConformityClusterTracker extends RDSConformityClusterTracker
         		                              objCap.capture())).thenReturn(1);
         tracker.addOrUpdate(cluster1);
 
-        List<Object> args = objCap.getAllValues();        
+        List<Object> args = objCap.getAllValues();
+
+        Assert.assertEquals(sqlCap.getValue(), "insert into conformitytable (cluster,region,ownerEmail,isConforming,isOptedOut,updateTimestamp,excludedRules,conformities,conformityRules) values (?,?,?,?,?,?,?,?,?)");
         Assert.assertEquals(args.size(), 9);
         Assert.assertEquals(args.get(0).toString(), "clustername1");
         Assert.assertEquals(args.get(1).toString(), "us-west-1");
