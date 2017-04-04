@@ -252,56 +252,66 @@ public class EddaEBSVolumeJanitorCrawler implements JanitorCrawler {
             LOGGER.info(String.format("Updating the latest attachment info for %d resources in region %s",
                     resources.size(), entry.getKey()));
             for (List<Resource> batch : Lists.partition(entry.getValue(), BATCH_SIZE)) {
-                LOGGER.info(String.format("Processing batch of size %d", batch.size()));
-                String batchUrl = getBatchUrl(entry.getKey(), batch);
-                JsonNode batchResult = null;
-                try {
-                    batchResult = eddaClient.getJsonNodeFromUrl(batchUrl);
-                } catch (IOException e) {
-                    LOGGER.error("Failed to get response for the batch.", e);
-                }
-                Map<String, Resource> idToResource = Maps.newHashMap();
-                for (Resource resource : batch) {
-                    idToResource.put(resource.getId(), resource);
+                processBatch(batch,entry);
 
-                }
-                if (batchResult == null || !batchResult.isArray()) {
-                    throw new RuntimeException(String.format("Failed to get valid document from %s, got: %s",
-                            batchUrl, batchResult));
-                }
-
-                Set<String> processedIds = Sets.newHashSet();
-                for (Iterator<JsonNode> it = batchResult.getElements(); it.hasNext();) {
-                    JsonNode elem = it.next();
-                    JsonNode data = elem.get("data");
-                    String volumeId = data.get("volumeId").getTextValue();
-                    Resource resource = idToResource.get(volumeId);
-                    JsonNode attachments = data.get("attachments");
-
-                    if (!(attachments.isArray() && attachments.size() > 0)) {
-                        continue;
-                    }
-                    JsonNode attachment = attachments.get(0);
-
-                    JsonNode ltime = elem.get("ltime");
-                    if (ltime == null || ltime.isNull()) {
-                        continue;
-                    }
-                    DateTime detachTime = new DateTime(ltime.asLong());
-                    processedIds.add(volumeId);
-                    setAttachmentInfo(volumeId, attachment, detachTime, resource);
-                }
-
-                for (Map.Entry<String, Resource> volumeEntry : idToResource.entrySet()) {
-                    String id = volumeEntry.getKey();
-                    if (!processedIds.contains(id)) {
-                        Resource resource = volumeEntry.getValue();
-                        LOGGER.info(String.format("Volume %s never was attached, use createTime %s as the detachTime",
-                                id, resource.getLaunchTime()));
-                        setAttachmentInfo(id, null, new DateTime(resource.getLaunchTime().getTime()), resource);
-                    }
-                }
             }
+        }
+    }
+
+    private void processBatch(List<Resource> batch, Map.Entry<String, List<Resource>> entry) {
+        LOGGER.info(String.format("Processing batch of size %d", batch.size()));
+        String batchUrl = getBatchUrl(entry.getKey(), batch);
+        JsonNode batchResult = null;
+        try {
+            batchResult = eddaClient.getJsonNodeFromUrl(batchUrl);
+        } catch (IOException e) {
+            LOGGER.error("Failed to get response for the batch.", e);
+        }
+        Map<String, Resource> idToResource = Maps.newHashMap();
+        for (Resource resource : batch) {
+            idToResource.put(resource.getId(), resource);
+
+        }
+        if (batchResult == null || !batchResult.isArray()) {
+            throw new RuntimeException(String.format("Failed to get valid document from %s, got: %s",
+                    batchUrl, batchResult));
+        }
+
+        Set<String> processedIds = Sets.newHashSet();
+        processBatchResult(batchResult,processedIds,idToResource);
+
+        for (Map.Entry<String, Resource> volumeEntry : idToResource.entrySet()) {
+            String id = volumeEntry.getKey();
+            if (!processedIds.contains(id)) {
+                Resource resource = volumeEntry.getValue();
+                LOGGER.info(String.format("Volume %s never was attached, use createTime %s as the detachTime",
+                        id, resource.getLaunchTime()));
+                setAttachmentInfo(id, null, new DateTime(resource.getLaunchTime().getTime()), resource);
+            }
+        }
+    }
+
+    private void processBatchResult(JsonNode batchResult, Set<String> processedIds, Map<String, Resource> idToResource) {
+
+        for (Iterator<JsonNode> it = batchResult.getElements(); it.hasNext();) {
+            JsonNode elem = it.next();
+            JsonNode data = elem.get("data");
+            String volumeId = data.get("volumeId").getTextValue();
+            Resource resource = idToResource.get(volumeId);
+            JsonNode attachments = data.get("attachments");
+
+            if (!(attachments.isArray() && attachments.size() > 0)) {
+                continue;
+            }
+            JsonNode attachment = attachments.get(0);
+
+            JsonNode ltime = elem.get("ltime");
+            if (ltime == null || ltime.isNull()) {
+                continue;
+            }
+            DateTime detachTime = new DateTime(ltime.asLong());
+            processedIds.add(volumeId);
+            setAttachmentInfo(volumeId, attachment, detachTime, resource);
         }
     }
 

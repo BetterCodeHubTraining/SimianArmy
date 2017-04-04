@@ -174,6 +174,28 @@ public class EddaASGJanitorCrawler implements JanitorCrawler {
                 .withResourceType(AWSResourceType.ASG)
                 .withLaunchTime(new Date(createdTime));
 
+        setTags(jsonNode,resource);
+
+
+        String owner = getOwnerEmailForResource(resource);
+        if (owner != null) {
+            resource.setOwnerEmail(owner);
+        }
+        JsonNode maxSize = jsonNode.get("maxSize");
+        if (maxSize != null) {
+            resource.setAdditionalField(ASG_FIELD_MAX_SIZE, String.valueOf(maxSize.getIntValue()));
+        }
+        // Adds instances and ELBs as additional fields.
+        addInstancesAndELBS(jsonNode, lcNameToCreationTime,resource);
+
+        // sets the field for the time when the ASG's traffic is suspended from ELB
+        setASGTrafficFromELB(jsonNode, asgName, region, resource);
+
+        return resource;
+
+    }
+
+    private void setTags(JsonNode jsonNode, Resource resource) {
         JsonNode tags = jsonNode.get("tags");
         if (tags == null || !tags.isArray() || tags.size() == 0) {
             LOGGER.debug(String.format("No tags is found for %s", resource.getId()));
@@ -185,16 +207,29 @@ public class EddaASGJanitorCrawler implements JanitorCrawler {
                 resource.setTag(key, value);
             }
         }
+    }
 
-        String owner = getOwnerEmailForResource(resource);
-        if (owner != null) {
-            resource.setOwnerEmail(owner);
+    private void setASGTrafficFromELB(JsonNode jsonNode, String asgName, String region, Resource resource) {
+        JsonNode suspendedProcesses = jsonNode.get("suspendedProcesses");
+        for (Iterator<JsonNode> it = suspendedProcesses.getElements(); it.hasNext();) {
+            JsonNode sp = it.next();
+            if ("AddToLoadBalancer".equals(sp.get("processName").getTextValue())) {
+                String suspensionTime = getSuspensionTimeString(sp.get("suspensionReason").getTextValue());
+                if (suspensionTime != null) {
+                    LOGGER.info(String.format("Suspension time of ASG %s is %s",
+                            asgName, suspensionTime));
+                    resource.setAdditionalField(ASG_FIELD_SUSPENSION_TIME, suspensionTime);
+                    break;
+                }
+            }
         }
-        JsonNode maxSize = jsonNode.get("maxSize");
-        if (maxSize != null) {
-            resource.setAdditionalField(ASG_FIELD_MAX_SIZE, String.valueOf(maxSize.getIntValue()));
+        Long lastChangeTime = regionToAsgToLastChangeTime.get(region).get(asgName);
+        if (lastChangeTime != null) {
+            resource.setAdditionalField(ASG_FIELD_LAST_CHANGE_TIME, String.valueOf(lastChangeTime));
         }
-        // Adds instances and ELBs as additional fields.
+    }
+
+    private void addInstancesAndELBS(JsonNode jsonNode, Map<String, Long> lcNameToCreationTime, Resource resource) {
         JsonNode instances = jsonNode.get("instances");
         resource.setDescription(String.format("%d instances", instances.size()));
         List<String> instanceIds = Lists.newArrayList();
@@ -220,26 +255,6 @@ public class EddaASGJanitorCrawler implements JanitorCrawler {
                 resource.setAdditionalField(ASG_FIELD_LC_CREATION_TIME, String.valueOf(lcCreationTime));
             }
         }
-        // sets the field for the time when the ASG's traffic is suspended from ELB
-        JsonNode suspendedProcesses = jsonNode.get("suspendedProcesses");
-        for (Iterator<JsonNode> it = suspendedProcesses.getElements(); it.hasNext();) {
-            JsonNode sp = it.next();
-            if ("AddToLoadBalancer".equals(sp.get("processName").getTextValue())) {
-                String suspensionTime = getSuspensionTimeString(sp.get("suspensionReason").getTextValue());
-                if (suspensionTime != null) {
-                    LOGGER.info(String.format("Suspension time of ASG %s is %s",
-                            asgName, suspensionTime));
-                    resource.setAdditionalField(ASG_FIELD_SUSPENSION_TIME, suspensionTime);
-                    break;
-                }
-            }
-        }
-        Long lastChangeTime = regionToAsgToLastChangeTime.get(region).get(asgName);
-        if (lastChangeTime != null) {
-            resource.setAdditionalField(ASG_FIELD_LAST_CHANGE_TIME, String.valueOf(lastChangeTime));
-        }
-        return resource;
-
     }
 
     private Map<String, Long> getLaunchConfigCreationTimes(String region) {

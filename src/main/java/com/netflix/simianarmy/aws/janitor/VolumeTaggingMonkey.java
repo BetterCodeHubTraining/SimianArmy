@@ -258,8 +258,8 @@ public class VolumeTaggingMonkey extends Monkey {
     }
 
     private Event updateJanitorMetaTag(Volume volume, String instance, String owner, Date lastDetachTime,
-                                       AWSClient awsClient) {
-        String meta = makeMetaTag(instance, owner, lastDetachTime);
+                                       AWSClient awsClient) {      String meta = makeMetaTag(instance, owner, lastDetachTime);
+
         Map<String, String> janitorTags = new HashMap<String, String>();
         janitorTags.put(JanitorMonkey.JANITOR_META_TAG, meta);
         LOGGER.info(String.format("Setting tag %s to '%s' for volume %s",

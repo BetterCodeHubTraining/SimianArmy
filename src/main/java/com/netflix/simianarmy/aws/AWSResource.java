@@ -18,18 +18,17 @@
 
 package com.netflix.simianarmy.aws;
 
-import java.util.Collection;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-
+import com.netflix.simianarmy.NamedType;
+import com.netflix.simianarmy.Resource;
+import com.netflix.simianarmy.ResourceType;
 import org.apache.commons.lang.Validate;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
-import com.netflix.simianarmy.NamedType;
-import com.netflix.simianarmy.Resource;
-import com.netflix.simianarmy.ResourceType;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * The class represents general AWS resources that are managed by janitor monkey.

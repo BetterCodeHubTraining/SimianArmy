@@ -700,6 +700,7 @@ public class AWSClient implements CloudClient {
         Validate.notNull(resourceIds);
         Validate.notEmpty(resourceIds);
         AmazonEC2 ec2Client = ec2Client();
+
         List<Tag> tags = new ArrayList<Tag>();
         for (Map.Entry<String, String> entry : keyValueMap.entrySet()) {
             tags.add(new Tag(entry.getKey(), entry.getValue()));
